@@ -81,7 +81,7 @@ class InvoiceParser
         $parts = explode(": ", $line);
         // ["montant", "852.38,"]
         // ["nom", "Frank Green,"]
-        $value = trim($parts[1]);
+        $value = trim($parts[1], ",");
         return $value;
     }
 }
