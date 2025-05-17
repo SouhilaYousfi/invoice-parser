@@ -54,7 +54,7 @@ class InvoiceParser
     private function updateInvoice(string $amount, string $name): void
     {
         $sql = 'UPDATE invoice SET amount = :amount WHERE name = :name';
-        $this->entityManager->getConnection()->prepare($sql)->executeQuery([
+        $this->entityManager->getConnection()->prepare($sql)->executeStatement([
             'amount' => $amount,
             'name' => $name
         ]);
