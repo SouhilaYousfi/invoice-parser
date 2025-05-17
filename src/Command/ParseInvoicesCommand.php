@@ -24,8 +24,12 @@ class ParseInvoicesCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $this->parser->parse('data/invoices.json');
-        $this->parser->parse('data/invoices.csv');
-        return Command::SUCCESS;
+        try {
+            $this->parser->parse('data/invoices.json');
+            $this->parser->parse('data/invoices.csv');
+            return Command::SUCCESS;
+        }catch (\Exception $exception){
+            return Command::FAILURE;
+        }
     }
 }

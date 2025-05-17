@@ -2,86 +2,61 @@
 
 declare(strict_types=1);
 
-
 namespace App\Service;
 
-use App\Entity\Invoice;
+use App\Service\Parser\ParserFactory;
+use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
-use http\Exception\InvalidArgumentException;
-
+use InvalidArgumentException;
 
 class InvoiceParser
 {
     private EntityManagerInterface $entityManager;
+    private ParserFactory $parserFactory;
 
-    public function __construct(EntityManagerInterface $entityManager)
-    {
+    public function __construct(
+        EntityManagerInterface $entityManager,
+        ParserFactory $parserFactory
+    ) {
         $this->entityManager = $entityManager;
+        $this->parserFactory = $parserFactory;
     }
 
-    /*
-     * Parse and update database from the input filePath
+    /**
+     * Parse the given file and update invoices in the database
+     *
+     * @param string $filePath Path to the file to parse
+     * @throws InvalidArgumentException If file cannot be parsed
      */
     public function parse(string $filePath): void
     {
-        if (!file_exists($filePath)) {
-            throw new InvalidArgumentException("File not found: {$filePath}");
-        }
-        if(str_contains($filePath, "json")) {
-           $this->parseJsonFile($filePath);
-        }elseif (str_contains($filePath, "csv")) {
-            $this->parseCsvFile($filePath);
-        }else {
-            throw new InvalidArgumentException("Extension not supported: {$filePath}");
-        }
-    }
-
-    private function parseJsonFile(string $filePath): void
-    {
-        $content = file_get_contents($filePath);
-        $lines = preg_split("/\r\n|\n|\r/", $content);
-        $amount="";
-        $name="";
-        foreach ($lines as $line) {
-            if(str_contains($line, "montant")) {
-                $amount = $this->extractValue($line);
-            } elseif(str_contains($line, "nom")) {
-                $name = $this->extractValue($line);
-            } elseif(str_contains($line, "}")) {
-                $this->updateInvoice($amount, $name);
+        try {
+            $parser = $this->parserFactory->createParser($filePath);
+            $invoices = $parser->parse($filePath);
+            foreach ($invoices as $invoice) {
+                if (isset($invoice['amount']) && isset($invoice['name'])) {
+                    $this->updateInvoice($invoice['amount'], $invoice['name']);
+                }
             }
+        } catch (\Throwable $e) {
+            throw new InvalidArgumentException(
+                "Failed to parse file {$filePath}: ");
         }
     }
 
-
-    private function parseCsvFile(string $filePath): void
+    /**
+     * Update an invoice in the database
+     *
+     * @param string $amount The invoice amount
+     * @param string $name The invoice name
+     * @throws Exception
+     */
+    private function updateInvoice(string $amount, string $name): void
     {
-        $rows = array_map(function ($row) {
-            return str_getcsv($row, "\t");
-        }, file($filePath));
-        foreach ($rows as $row) {
-            if (count($row)>=3) {
-                $amount = $row[0];
-                $name = $row[2];
-                $this->updateInvoice($amount, $name);
-            }
-        }
-    }
-
-    private function updateInvoice(string $amount, string $name): void{
         $sql = 'UPDATE invoice SET amount = :amount WHERE name = :name';
-        $this->entityManager->getConnection()->prepare($sql)->executeStatement([
+        $this->entityManager->getConnection()->prepare($sql)->executeQuery([
             'amount' => $amount,
             'name' => $name
         ]);
-    }
-
-    private function extractValue(string $line): string{
-
-        $parts = explode(": ", $line);
-        // ["montant", "852.38,"]
-        // ["nom", "Frank Green,"]
-        $value = trim($parts[1], ",");
-        return $value;
     }
 }
